@@ -99,8 +99,13 @@ private:
 			}
 			n=p;
 		}
-		Literal a = store[0];
-		store.clear();
+		Literal a;
+		if(store.size()){
+			a = store[0];
+			store.clear();
+		}else{
+			a = getTrue();
+		}
 		return a;
 	}
 public:
