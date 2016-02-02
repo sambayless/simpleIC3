@@ -9,7 +9,7 @@
 #define CONE_H_
 #include <minisat/mtl/Vec.h>
 
-#include "Bitset.h"
+#include "util/Bitset.h"
 
 extern "C" {
 #include "aiger/aiger.h"

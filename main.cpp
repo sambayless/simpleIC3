@@ -5,7 +5,7 @@ extern "C" {
 #include "ic3/ic3.h"
 #include <minisat/mtl/Vec.h>
 #include <minisat/core/SolverTypes.h>
-#include "util/aigtocnf.h"
+#include "aiglib/aigtocnf.h"
 
 #include <zlib.h>
 #include <errno.h>
@@ -15,7 +15,7 @@ extern "C" {
 
 using namespace Minisat;
 using namespace SimpIC3;
-
+using namespace aiglib;
 
 
 

@@ -11,7 +11,7 @@ extern "C" {
 #include <minisat/mtl/Vec.h>
 
 using namespace Minisat;
-
+namespace aiglib{
 static int
 lit2int (aiger * mgr, unsigned a, int startVar)
 {
@@ -152,6 +152,6 @@ template<class Solver>
 
 	  return True;
 	}
-
+};
 
 #endif

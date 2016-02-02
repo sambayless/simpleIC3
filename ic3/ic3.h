@@ -8,10 +8,10 @@
 #include <minisat/mtl/Sort.h>
 #include <minisat/core/Dimacs.h>
 
-#include "VHeap.h"
+#include "util/VHeap.h"
 #include "Cone.h"
 #include "Ternary.h"
-#include "Bitset.h"
+#include "util/Bitset.h"
 #include <stdexcept>
 #include "ic3config.h"
 #include "Cone.h"
