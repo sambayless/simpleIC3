@@ -2,10 +2,10 @@
 extern "C" {
 #include "aiger/aiger.h"
 }
-#include "ic3.h"
+#include "ic3/ic3.h"
 #include <minisat/mtl/Vec.h>
 #include <minisat/core/SolverTypes.h>
-#include "aigtocnf.h"
+#include "util/aigtocnf.h"
 
 #include <zlib.h>
 #include <errno.h>
