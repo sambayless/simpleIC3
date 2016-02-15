@@ -7,7 +7,7 @@
 
 #ifndef IC3TYPES_H_
 #define IC3TYPES_H_
-
+#include <cassert>
 #include <minisat/core/SolverTypes.h>
 #include <minisat/mtl/Vec.h>
 namespace SimpIC3{
@@ -18,7 +18,7 @@ struct TCube{
 	int refs=0;
 	TCube * parent;
 	Minisat::vec<Minisat::Lit> assignment;
-
+	Minisat::vec<Minisat::Lit> primary_inputs;
 	 static long allocatedTCubes(){
 		return total_tcubes;
 	}
@@ -39,11 +39,18 @@ struct TCube{
 	TCube(const TCube & from):frame(from.frame),parent(from.parent){
 		remaining_tcubes++;total_tcubes++;
 		from.assignment.copyTo(assignment);
+		from.primary_inputs.copyTo(primary_inputs);
 	}
 	TCube(int _frame,const Minisat::vec<Minisat::Lit> & assign,TCube * parent):frame(_frame),parent(parent){
 		remaining_tcubes++;total_tcubes++;
 		assign.copyTo(assignment);
 	}
+	TCube(int _frame,const Minisat::vec<Minisat::Lit> & assign,const Minisat::vec<Minisat::Lit> & primary_inputs_assignmnet,TCube * parent):frame(_frame),parent(parent){
+		remaining_tcubes++;total_tcubes++;
+		assign.copyTo(assignment);
+		primary_inputs_assignmnet.copyTo(primary_inputs);
+	}
+
 	~TCube(){
 		assert(refs==0);
 		parent=nullptr;

@@ -65,7 +65,8 @@ class IC3{
 	vec<int> act_vars;
 	//temporary vectors
 	vec<char> seen_subsume;
-
+	vec<Lit> pre;
+	vec<Lit> pre_inputs;
 #ifndef NDEBUG
 	Solver *dbg=nullptr;
 #endif
@@ -288,76 +289,84 @@ class IC3{
 		assert(r==dbg_solveAtFrame(extra_assumptions,frame));
 		return r;
 	}
-
-	bool pre_image(vec<Lit> & p, vec<int> & aiger_lits, vec<Lit> & store){
-		store.clear();
-
-		bool r = solveAtFrame(p,depth());
-		if(r){
-			for(int i =0;i<in_latches.size();i++){
-				if(S.modelValue(in_latches[i])==l_True){
-					store.push(mkLit(in_latches[i]));
-				}else{
-					store.push(~mkLit(in_latches[i]));
+	bool pre_image(vec<Lit> & p, vec<int> & aiger_lits, vec<Lit> & store, vec<Lit> & store_inputs, bool optimize=true){
+			store.clear();
+			store_inputs.clear();
+			bool r = solveAtFrame(p,depth());
+			if(r){
+				for(int i =0;i<in_latches.size();i++){
+					if(S.modelValue(in_latches[i])==l_True){
+						store.push(mkLit(in_latches[i]));
+					}else{
+						store.push(~mkLit(in_latches[i]));
+					}
+				}
+				for(int i =0;i<primary_inputs.size();i++){
+					if(S.modelValue(primary_inputs[i])==l_True){
+						store_inputs.push(mkLit(primary_inputs[i]));
+					}else{
+						store_inputs.push(~mkLit(primary_inputs[i]));
+					}
 				}
 			}
+			if(!optimize)
+				return r;
+
+			//apply coi, ternary simulation
+			if(opt_coi){
+				int i,j=0;
+				for(i = 0;i< store.size();i++){
+					Lit l = store[i];
+					int latchN = inLatchN(var(l));
+					if(property_coi[i]){
+						store[j++]=store[i];
+					}else{
+						stats_coi_lits_removed++;
+					}
+				}
+				store.shrink(i-j);
+			}
+			 if(ternary){
+				 ternary_assign.clear();
+				 ternary_assign.growTo(in_latches.size(),l_Undef);
+				ternary_preserve.clear();
+				for(int i = 0;i<aiger_lits.size();i++){
+					ternary_preserve.push(aiger_lits[i]);
+				}
+				for(int i = 0;i<store.size();i++){
+					Lit l = store[i];
+					int latchN = inLatchN(var(l));
+					if(sign(l)){
+						ternary_assign[latchN]=l_False;
+					}else{
+						ternary_assign[latchN]=l_True;
+					}
+				}
+
+				ternary_inputs.clear();
+				for(int i = 0;i<primary_inputs.size();i++){
+					Var v = primary_inputs[i];
+					ternary_inputs.push(S.modelValue(v));
+				}
+
+
+				ternary->reduce(ternary_assign,ternary_inputs,ternary_preserve);
+				int i,j=0;
+				for(i = 0;i<store.size();i++){
+					Lit l = store[i];
+					int latch = inLatchN(var(l));
+					lbool v= ternary_assign[latch];
+					if(v!=l_Undef){
+						store[j++]=l;
+					}else{
+						stats_ternary_lits_removed++;
+					}
+				}
+				store.shrink(i-j);
+			 }
+			return r;
 		}
 
-		//apply coi, ternary simulation
-		if(opt_coi){
-			int i,j=0;
-			for(i = 0;i< store.size();i++){
-				Lit l = store[i];
-				int latchN = inLatchN(var(l));
-				if(property_coi[i]){
-					store[j++]=store[i];
-				}else{
-					stats_coi_lits_removed++;
-				}
-			}
-			store.shrink(i-j);
-		}
-		 if(ternary){
-			 ternary_assign.clear();
-			 ternary_assign.growTo(in_latches.size(),l_Undef);
-			ternary_preserve.clear();
-			for(int i = 0;i<aiger_lits.size();i++){
-				ternary_preserve.push(aiger_lits[i]);
-			}
-			for(int i = 0;i<store.size();i++){
-				Lit l = store[i];
-				int latchN = inLatchN(var(l));
-				if(sign(l)){
-					ternary_assign[latchN]=l_False;
-				}else{
-					ternary_assign[latchN]=l_True;
-				}
-			}
-
-			ternary_inputs.clear();
-			for(int i = 0;i<primary_inputs.size();i++){
-				Var v = primary_inputs[i];
-				ternary_inputs.push(S.modelValue(v));
-			}
-
-
-			ternary->reduce(ternary_assign,ternary_inputs,ternary_preserve);
-			int i,j=0;
-			for(i = 0;i<store.size();i++){
-				Lit l = store[i];
-				int latch = inLatchN(var(l));
-				lbool v= ternary_assign[latch];
-				if(v!=l_Undef){
-					store[j++]=l;
-				}else{
-					stats_ternary_lits_removed++;
-				}
-			}
-			store.shrink(i-j);
-		 }
-		return r;
-	}
-	vec<Lit> pre;
 
 	void checkFramesDeep(){
 #ifndef NDEBUG
@@ -602,48 +611,83 @@ public:
 		return frames.size()- 1;
 	}
 	vec<int> tmp_seen;
-	void printTCube(TCube * t){
-		if(opt_verb<2)
-					return;
-		printf("TCube %d [", t->frame);
-		printLatches(t->assignment,true);
-		printf("]");
-	}
-	void printLatches(vec<Lit> & latches,bool out){
-		if(opt_verb<2)
-					return;
-		tmp_seen.clear();
-		tmp_seen.growTo(out_latches.size());
-		for(int i = 0;i<latches.size();i++){
-			Lit l = latches[i];
+	void printTCube(TCube * t, bool force_print=false, bool print_input=true){
+			if(!force_print )
+				return;
+			printf("TCube %d [", t->frame);
+			printLatches(t->assignment,true,force_print);
+			printf(" PI: ");
+			printInput(t->primary_inputs,force_print);
+			printf("]");
+		}
+		void printInput(vec<Lit> & input, bool force_print=false){
+				if(!force_print )
+							return;
+				tmp_seen.clear();
 
-			if(out){
-				assert(isOutLatch(l));
-				if(sign(l)){
-					tmp_seen[outLatchN(var(l))]=-1;
-				}else{
-					tmp_seen[outLatchN(var(l))]=1;
+				for(int i = 0;i<input.size();i++){
+					Lit l = input[i];
+					Var v = var(l);
+					tmp_seen.growTo(v+1,0);
+
+					if(sign(l)){
+						tmp_seen[var(l)]=-1;
+					}else{
+						tmp_seen[var(l)]=1;
+					}
+
 				}
-			}else{
-				assert(isInLatch(l));
-				if(sign(l)){
-					tmp_seen[inLatchN(var(l))]=-1;
+
+				for(int i = 0;i<primary_inputs.size();i++){
+					Var v = primary_inputs[i];
+					if(v>=tmp_seen.size())
+						printf("x");
+					else{
+						if(tmp_seen[v]==1)
+							printf("1");
+						else if (tmp_seen[v]==-1){
+							printf("0");
+						}else{
+							printf("x");
+						}
+					}
+				}
+			}
+		void printLatches(vec<Lit> & latches,bool out, bool force_print=false){
+			if(!force_print)
+						return;
+			tmp_seen.clear();
+			tmp_seen.growTo(out_latches.size());
+			for(int i = 0;i<latches.size();i++){
+				Lit l = latches[i];
+
+				if(out){
+					assert(isOutLatch(l));
+					if(sign(l)){
+						tmp_seen[outLatchN(var(l))]=-1;
+					}else{
+						tmp_seen[outLatchN(var(l))]=1;
+					}
 				}else{
-					tmp_seen[inLatchN(var(l))]=1;
+					assert(isInLatch(l));
+					if(sign(l)){
+						tmp_seen[inLatchN(var(l))]=-1;
+					}else{
+						tmp_seen[inLatchN(var(l))]=1;
+					}
+				}
+			}
+
+			for(int i = 0;i<out_latches.size();i++){
+				if(tmp_seen[i]==1)
+					printf("1");
+				else if (tmp_seen[i]==-1){
+					printf("0");
+				}else{
+					printf("x");
 				}
 			}
 		}
-
-		for(int i = 0;i<out_latches.size();i++){
-			if(tmp_seen[i]==1)
-				printf("1");
-			else if (tmp_seen[i]==-1){
-				printf("0");
-			}else{
-				printf("x");
-			}
-		}
-	}
 	void printFrameSizes(){
 		if(opt_verb<2)
 			return;
@@ -678,19 +722,21 @@ public:
 		}
 	}
 	int main_iteration=0;
-	bool solve(vec<Lit> & property,vec<int> & aiger_property){
+	bool solve(vec<Lit> & property,vec<int> & aiger_property,bool property_needs_preimage = true){
+
 		if(opt_coi){
 			if(aiger_property.size()!=property.size()){
 				throw std::runtime_error("If coi is used, then aiger lits must be supplied for the bad state\n");
 			}
 			buildCOI(aiger_property);
 		}
+		vec<Lit> empty;
 		while(true){
-			while(pre_image(property,aiger_property,pre)){
+			while(pre_image(property,aiger_property,pre,pre_inputs,property_needs_preimage)){
 				++main_iteration;
 				inToOut(pre);
 				assert(hasOutLatches(pre));
-				TCube * B = new TCube(depth(), pre,nullptr);
+				TCube * B = new TCube(depth(),property_needs_preimage? pre:property,property_needs_preimage? pre_inputs:empty,nullptr);
 				B->ref();
 				if(opt_verb>=2){
 					printf("Blocking ");
@@ -700,6 +746,7 @@ public:
 				if((cex =block_cube(B))!=nullptr){
 					//found cex
 					checkCEX(property,cex);
+					printCEX(cex);
 					return true;
 				}
 				bool r = B->deref();
@@ -787,6 +834,13 @@ public:
 						}else if (v==l_False){
 							Lit l = ~mkLit(in_latches[i]);
 							t->assignment.push(inToOut(l));
+						}
+					}
+					for(int i =0;i<primary_inputs.size();i++){
+						if(S.modelValue(primary_inputs[i])==l_True){
+							t->primary_inputs.push(mkLit(primary_inputs[i]));
+						}else{
+							t->primary_inputs.push(~mkLit(primary_inputs[i]));
 						}
 					}
 					assert(t->assignment.size());
@@ -1571,7 +1625,23 @@ public:
 		}
 		return true;
 	}
+	void printCEX(TCube * c){
 
+			if(!c){
+				printf("No counter example\n");
+				return;
+			}
+			printf("Counter example:\n");
+			while(true){
+				{
+					printTCube(c,true);printf("\n");
+					TCube * parent = c->parent;
+					if(!parent)
+						break;
+					c = parent;
+				}
+			}
+		}
 	void checkCEX(vec<Lit> & p,TCube * cex){
 		if (opt_verify){
 			if(!isReset(cex->assignment)){

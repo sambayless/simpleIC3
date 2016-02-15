@@ -71,7 +71,8 @@ int main(int argc,char** argv){
 		S.freezeVar(var(out_latches[i]));
 	for(int i = 0;i<outputLits.size();i++)
 		S.freezeVar(var(outputLits[i]));
-
+	for(int i = 0;i<badStates.size();i++)
+		S.freezeVar(var(badStates[i]));
 	bool check = S.solve(true,true);
 	assert(check);
 
