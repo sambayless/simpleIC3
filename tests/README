@@ -1,0 +1,15 @@
+This directory contains a large number of mostly easy AIG-format instances for model checkers, intended for use in regression testing.
+Many of these were produced by delta-debugging instances from the Hardware Model Checking Competition: http://fmv.jku.at/hwmcc10/
+Others were produced through fuzz testing with aigfuzz: http://fmv.jku.at/aiger
+
+These instances are *roughly* numbered by increasing difficulty.
+
+Also included is the bash script test.sh, which can be useful for regression testing using these instances.
+The script assumes you have runlim (http://fmv.jku.at/runlim/) and abc (http://people.eecs.berkeley.edu/~alanmi/abc/)
+installed. It runs a given solver on each instance with a 5 second timelimit, stopping if any instance either crashes
+the solver or disagrees with abc.
+
+The script also uses aigfuzz to do fuzztesting.
+
+Example usage:
+$test.sh simpic3

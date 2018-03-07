@@ -1,0 +1,10 @@
+================================================================================
+Directory Overview:
+
+minisat/mtl/            Mini Template Library
+minisat/utils/          Generic helper code (I/O, Parsing, CPU-time, etc)
+minisat/core/           A core version of the solver
+minisat/simp/           An extended solver with simplification capabilities
+doc/                    Documentation
+README
+LICENSE
