@@ -1,0 +1,17 @@
+# SimpleIC3, a simple, high-performance C++ implementation of IC3 based on Minisat and PDR, including ternary simulation support.
+
+Minisat is included (src/minisat), though it should also be possible to use a recent version from github.
+The AIGER library is also included (src/aiger).
+The main implementation can be found in src/simpleIC3/ic3
+
+Build instructions:
+Requires C++11, and zlib.
+
+cmake .
+
+Tested with gcc 5 and clang 4 on Ubuntu 14.04 and 16.04.
+
+Usage:
+
+$simpleIC3 tests/test_10c.aig
+
