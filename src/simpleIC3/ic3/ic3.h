@@ -37,6 +37,8 @@
 #include "ic3Types.h"
 using namespace Minisat;
 namespace SimpIC3{
+//uncomment to enable expensive debugging checks
+//#define DEBUG_IC3
 class IC3{
 
 	SimpSolver & S;
@@ -86,9 +88,6 @@ class IC3{
 	vec<char> seen_subsume;
 	vec<Lit> pre;
 	vec<Lit> pre_inputs;
-#ifndef NDEBUG
-	Solver *dbg=nullptr;
-#endif
 
 	bool isActivationLit(Lit activationLit){
 		Var v = var(activationLit);
@@ -212,60 +211,7 @@ class IC3{
 		}
 		return true;
 	}
-#ifndef NDEBUG
 
-	vec<Var> dbg_vars;
-#endif
-	void newDbgLit(Lit forLit){
-#ifndef NDEBUG
-		Var v = dbg->newVar();
-		dbg_vars.growTo(v+1,var_Undef);
-		assert(dbg_vars[var(forLit)]==var_Undef);
-		dbg_vars[var(forLit)]=v;
-#endif
-	}
-	void releaseDbgLit(Lit forLit){
-#ifndef NDEBUG
-		assert(dbg_vars[var(forLit)]!=var_Undef);
-		dbg_vars[var(forLit)]=var_Undef;
-#endif
-	}
-	Var toDbg(Var from){
-#ifndef NDEBUG
-		assert(dbg_vars[from]!=var_Undef);
-		return dbg_vars[from];
-#endif
-	}
-	Lit toDbg(Lit from){
-#ifndef NDEBUG
-		Var v = toDbg(var(from));
-		return mkLit(v,sign(from));
-#endif
-        return lit_Undef;
-	}
-	void toDbg(vec<Lit> & from){
-#ifndef NDEBUG
-		for(int i = 0;i<from.size();i++){
-			from[i]=toDbg(from[i]);
-		}
-#endif
-	}
-	void toDbg(vec<Lit> & from, vec<Lit> & dst){
-#ifndef NDEBUG
-		assert(from!=dst);
-		dst.clear();
-		for(int i = 0;i<from.size();i++){
-			dst.push(toDbg(from[i]));
-		}
-#endif
-	}
-	vec<Lit> dbg_tmp2;
-	void addDbgClause(vec<Lit> &c){
-#ifndef NDEBUG
-		toDbg(c,dbg_tmp2);
-		dbg->addClause(dbg_tmp2);
-#endif
-	}
 
 	void releaseClause(Lit l){
 		int clauseN = getClauseFromActivation(l);
@@ -283,10 +229,6 @@ class IC3{
 		is_subsumed[clauseN]=false;
 		//TODO: we can re-use this clause index, which will save on memory a bit
 		S.releaseVar(~l);
-
-		releaseDbgLit(~l);
-
-
 	}
 
 	VHeap<TCube*> Q;//Q of bad states to process
@@ -306,7 +248,6 @@ class IC3{
 		for(int i = 0;i<extra_assumptions.size();i++)
 			tmp_assumps.push(extra_assumptions[i]);
 		bool r = S.solve(tmp_assumps);
-		assert(r==dbg_solveAtFrame(extra_assumptions,frame));
 		return r;
 	}
 	bool pre_image(vec<Lit> & p, vec<int> & aiger_lits, vec<Lit> & store, vec<Lit> & store_inputs, bool optimize=true){
@@ -387,32 +328,6 @@ class IC3{
 			return r;
 		}
 
-
-	void checkFramesDeep(){
-#ifndef NDEBUG
-		static vec<Lit> tmp;
-		for(int i = 0;i<frames.size();i++){
-			vec<Lit> & frame = frames[i];
-			for(int j = 0;j<frame.size();j++){
-				Lit l = frame[j];
-				assert(isActivationLit(l));
-				int clauseN = getClauseFromActivation(l);
-				assert(clause_frame[clauseN]==i);
-				vec<Lit> & c = clauses[clauseN];
-				assert(c.size());
-				assert(hasInLatches(c));
-				if(i>0){
-					tmp.clear();
-					for(int k = 0;k<c.size();k++){
-						tmp.push(~inToOut(c[k]));
-					}
-					assert(!dbg_solveAtFrame(tmp,i-1));
-				}
-			}
-		}
-
-#endif
-	}
 	void moveInvariantToEnd(int from){
 
 		for(int f = from;f<frames.size()-1;f++){
@@ -435,43 +350,7 @@ class IC3{
 
 	}
 
-	void checkFrames(){
-#ifndef NDEBUG
-		for(int i = 0;i<frames.size();i++){
-			vec<Lit> & frame = frames[i];
-			for(int j = 0;j<frame.size();j++){
-				Lit l = frame[j];
-				assert(l!=lit_True);
 
-				assert(isActivationLit(l));
-				int clauseN = getClauseFromActivation(l);
-				assert(clause_frame[clauseN]==i);
-			}
-		}
-		checkFramesDeep();
-#endif
-
-	}
-
-	bool dbg_solveAtFrame(vec<Lit> & extra_assumptions, int frame){
-#ifndef NDEBUG
-			assert(frame>=0);
-			assert(frame<frames.size());
-			tmp_assumps.clear();
-
-			for(int f = frame;f<frames.size();f++){
-				vec<Lit> & acts = frames[f];
-				for(int i = 0;i<acts.size();i++)
-					tmp_assumps.push(acts[i]);
-			}
-
-			for(int i = 0;i<extra_assumptions.size();i++)
-				tmp_assumps.push(extra_assumptions[i]);
-			toDbg(tmp_assumps);
-			return dbg->solve(tmp_assumps);
-#endif
-			return false;
-	}
 
 	void buildCOI(vec<int> & aiger_lit_property){
 		cur_coi.clear();
@@ -520,20 +399,6 @@ class IC3{
 
 		return S.solve(pre_tmp);
 
-	}
-
-	bool dbg_isPreimage(vec<Lit> & pre,vec<Lit> & post){
-#ifndef NDEBUG
-		pre_tmp.clear();
-		pre.copyTo(pre_tmp);
-		outToIn(pre_tmp);
-
-		for(int i = 0;i<post.size();i++){
-			pre_tmp.push(post[i]);
-		}
-		toDbg(pre_tmp);
-		return dbg->solve(pre_tmp);
-#endif
 	}
 
 	long stats_subsumed_clauses_removed=0;
@@ -590,26 +455,6 @@ public:
 		frames.push();
 
 
-#ifndef NDEBUG
-		vec<Lit> tmp_d;
-		dbg = new Solver();
-		for(int v = 0;v<S.nVars();v++){
-			newDbgLit(mkLit(v));
-		}
-		for(auto it = S.trailBegin();it!= S.trailEnd();++it){
-			Lit l = *it;
-			dbg->addClause(toDbg(l));
-		}
-
-		for(auto it = S.clausesBegin();it!= S.clausesEnd();++it){
-			const Clause & c = *it;
-			tmp_d.clear();
-			for(int i = 0;i<c.size();i++){
-				tmp_d.push(c[i]);
-			}
-			addDbgClause(tmp_d);
-		}
-#endif
 
 		vec<Lit> t;
 		for(int i = 0;i<in_latches.size();i++){
@@ -864,7 +709,6 @@ public:
 						}
 					}
 					assert(t->assignment.size());
-					assert(dbg_isPreimage(t->assignment,s.assignment));
 					//remove literals that are outside of the cone of influence from the solution
 					//note: how does this interact with aiger constraints?
 					 if(opt_coi){
@@ -885,9 +729,6 @@ public:
 							}
 						}
 						t->assignment.shrink(i-j);
-
-						assert(dbg_isPreimage(t->assignment,s.assignment));
-
 					 }
 
 					 if(ternary){
@@ -929,8 +770,6 @@ public:
 							}
 						}
 						t->assignment.shrink(i-j);
-						assert(dbg_isPreimage(t->assignment,s.assignment));
-
 					 }
 					Q.insert(t->frame,t);
 				}else{
@@ -999,16 +838,6 @@ public:
 				}
 			}else{
 				assert(blocked_at>=s.frame);
-				assert(!dbg_solveAtFrame(s.assignment,s.frame-1));
-#ifndef NDEBUG
-				{
-					static vec<Lit> t;
-					s.assignment.copyTo(t);
-					outToIn(t);
-					assert(!dbg_solveAtFrame(t,blocked_at));
-				}
-#endif
-				assert(!dbg_solveAtFrame(s.assignment,blocked_at-1));
 				//Keep syntactically blocked cubes to be tested at future time frames, instead of discarding them
 				if( opt_queue_forward  && (opt_keep_all_cubes || blocked_at < depth())){
 					//blocked_at is a small optimization; instead of just queueing these forward to s.frame+1,
@@ -1042,17 +871,6 @@ public:
 		assert(!isSubsumedAt(cube,f));
 		assert(!conflictsWithReset(cube,true));
 
-#ifndef NDEBUG
-
-
-		tmp_c.clear();
-		if(f>0){
-			for (int k = 0;k<cube.size();k++){
-				tmp_c.push( ~inToOut(cube[k]));
-			}
-			assert(!dbg_solveAtFrame(tmp_c,f-1));
-		}
-#endif
 		int old_size = cube.size();
 		bool generalized = false;
 		if(opt_generalize_rounds>0){
@@ -1077,10 +895,7 @@ public:
 		assert(hasInLatches(cube));
 		cube.push(~act);
 		S.addClause(cube);
-#ifndef NDEBUG
-		newDbgLit(act);
-		addDbgClause(cube);
-#endif
+
 		cube.pop();
 		int max = f;
 		if(opt_early_clause_prop){
@@ -1128,24 +943,8 @@ public:
 			printLatches(cube,false);
 			printf("], removed %d lits through gen (%d)\n",old_size-cube.size(),stats_generalize_lits_removed);
 		}
-#ifndef NDEBUG
-		tmp_c.clear();
-
-		for (int k = 0;k<cube.size();k++){
-			tmp_c.push( ~cube[k]);
-		}
-		assert(!dbg_solveAtFrame(tmp_c,f));
 
 		tmp_c.clear();
-		if(max>0){
-			for (int k = 0;k<cube.size();k++){
-				tmp_c.push( ~inToOut(cube[k]));
-			}
-			assert(!dbg_solveAtFrame(tmp_c,max-1));
-		}
-#endif
-		tmp_c.clear();
-		checkFramesDeep();
 	}
 	vec<Lit> sub_t;
 	bool isSubsumedAt(vec<Lit> & cube, int frame){
@@ -1170,7 +969,6 @@ public:
 		//we can probably safely start at t=1 after the first run through; and the benefit to ever starting at frame 0 is unclear... it just means we force the checker to attempt to check for any constant latches.
 		for(int f = 0;f<depth();f++){
 
-			checkFrames();
 			printFrames();
 
 			vec<Lit> & frame = frames[f];//activation lits for this frame
@@ -1229,7 +1027,6 @@ public:
 				return true;//invariant found
 			}
 		}
-		checkFrames();
 		printFrames(true);
 		if(opt_early_subsumption || opt_remove_subsumed_during_clause_prop || opt_remove_subsumed_last ||opt_clause_prop_subsume){
 			vec<Lit> & frame = frames.last();//activation lits for this frame
@@ -1254,7 +1051,6 @@ public:
 			}
 			frame.shrink(i-j);
 		}
-		checkFrames();
 		return false;
 	}
 	struct LessThanClause{
@@ -1445,9 +1241,6 @@ public:
 		if(frame>0){
 			//the 0th frame doesn't need the clause added
 			activation = mkLit(S.newVar());
-
-			newDbgLit(activation);
-
 		}
 
 		for (int j = 0; j < gen_order.size(); j++ )
@@ -1463,7 +1256,7 @@ public:
 			if(out_l==lit_True)
 				continue;
 
-	#ifndef NDEBUG
+	#ifndef DEBUG_IC3
 			int tcount = 0;
 			for(int k = 0;k<out_clause.size();k++){
 				if(out_clause[k] != lit_True  && satisfiesReset(~outToIn(out_clause[k])))
@@ -1486,7 +1279,6 @@ public:
 			if(frame){
 				in_clause.push(~activation);
 				S.addClause(in_clause);
-				addDbgClause(in_clause);
 				out_clause.push(activation);
 			}
 
@@ -1496,10 +1288,7 @@ public:
 
 				if(frame){
 					S.releaseVar(~activation);
-					releaseDbgLit(~activation);
 					activation= mkLit(S.newVar());
-					newDbgLit(activation);
-
 					in_clause.pop();
 					out_clause.pop();
 				}
@@ -1553,7 +1342,7 @@ public:
 
 			assert(!conflictsWithReset(out_clause));
 
-	#ifndef NDEBUG
+	#ifndef DEBUG_IC3
 			for(int j = 0;j<lits_to_keep.size();j++)
 					assert(!lits_to_keep[j]);
 			int d_num_latches_true=0;
@@ -1570,7 +1359,6 @@ public:
 
 		if(activation!=lit_Undef){
 			S.releaseVar(~activation);
-			releaseDbgLit(~activation);
 		}
 
 		assert(!conflictsWithReset(out_clause));
@@ -1694,8 +1482,6 @@ public:
 	}
 
 	void checkInvariant(vec<Lit> & p){
-		checkFrames();
-		checkFramesDeep();
 		if (opt_verify){
 			bool r = solveAtFrame(p,depth());
 			if(r){

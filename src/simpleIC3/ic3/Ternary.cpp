@@ -26,6 +26,8 @@ extern "C" {
 }
 
 using namespace Minisat;
+//uncomment to enable expensive debugging checks
+//#define DEBUG_IC3
 using namespace SimpIC3;
 	Ternary::Ternary(aiger * _aig,vec<int> * _priority):aig(_aig),priority(_priority){
 
@@ -95,7 +97,7 @@ using namespace SimpIC3;
 			return true;
 		}
 
-#ifndef NDEBUG
+#ifndef DEBUG_IC3
 		vec<lbool> start_state;
 		assigns.copyTo(start_state);
 #endif
@@ -114,7 +116,7 @@ using namespace SimpIC3;
 						seen[o]=true;
 						if(preserve[o]){
 							simulate(input_var, old_assign,empty);
-#ifndef NDEBUG
+#ifndef DEBUG_IC3
 							for(int i = 0;i<assigns.size();i++){
 								assert(assigns[i]==start_state[i]);
 							}
@@ -171,7 +173,7 @@ using namespace SimpIC3;
 			propagate(l);
 		}
 
-#ifndef NDEBUG
+#ifndef DEBUG_IC3
 		static vec<lbool> start_assign;
 		assigns.copyTo(start_assign);
 #endif
@@ -216,7 +218,7 @@ using namespace SimpIC3;
 		}
 
 
-#ifndef NDEBUG
+#ifndef DEBUG_IC3
 
 			for(int i = 0;i<preserve.size();i++){
 				if(preserve[i]){
